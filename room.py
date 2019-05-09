@@ -2,24 +2,22 @@ import numpy as np
 from equipment import Heater, Cooler
 
 class Room():
-    def __init__(self, name='', temperature=None, static_temperature=False, position=None):
+    def __init__(self, name='', temperature=None, position=None):
         self.name = name
         self.temperature = temperature
-        self.static_temperature = static_temperature
+        self.new_temperature = 0
         self.neighbors = []
 
     def __repr__(self):
-        return f'Room: {self.name}\n\tTemperature: {self.temperature}'
+        return f'Room: {self.name}\n\tTemperature: {self.temperature}\n'
 
     def __str__(self):
         #return self.__repr__()
         return f'Room {self.name}'
 
-    def update_temperature(self, new_temperature):
-        if self.static_temperature:
-            return None
+    def update_temperature(self, dt, coefficient):
+        #self.temperature = new_temperature
         
-        self.temperature = new_temperature
         return new_temperature
 
     def add_neighbors(self, neighbors):
@@ -32,12 +30,13 @@ class Room():
                 continue
             if neighbor is self:
                 print(f'\n{self} cannot be its own neighbor')
+                continue
             self.neighbors.append(neighbor)
             neighbor.neighbors.append(self)
 
 class Office(Room):
-    def __init__(self, name='', temperature=None, position=None, heater_power, cooler_power):
-        super().__init__(name, temperature, static_temperature=False)
+    def __init__(self, name='', temperature=None, position=None, heater_power=0, cooler_power=0):
+        super().__init__(name, temperature)
         heater = Heater(self.name, heater_power)
         cooler = Cooler(self.name, cooler_power)
 

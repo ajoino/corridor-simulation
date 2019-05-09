@@ -8,13 +8,10 @@ class HeatRegulationEquipment():
         self.is_on = is_on
         self.heater = True
         if is_on and heater:
-            print(self.name)
             self.output = power
         elif is_on and not heater:
-            print(self.name)
             self.output = -power
         elif not is_on:
-            print(self.name)
             self.output = 0
     
     def turn_on(self):
