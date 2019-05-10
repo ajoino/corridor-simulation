@@ -1,3 +1,4 @@
+from pprint import pprint
 import numpy as np
 import matplotlib.pyplot as plt
 from room import Room, Office
@@ -29,14 +30,21 @@ if __name__ == '__main__':
     for office in offices:
         office.add_neighbors([corridor, outside])
 
-    timeline = np.arange(0,201,10)
-    print(timeline)
+    dt = 1
+    timeline = np.arange(0,611,dt)
     corridor_temperature_over_time = [corridor.temperature]
-    for t in timeline:
-        temp = corridor.temperature
-        neighbor_temps = [neighbor.temperature for neighbor in corridor.neighbors]
-        corridor.temperature = temp + 10*0.008*np.sum([neighbor_temp - temp for neighbor_temp in neighbor_temps])
+    office_temperature_over_time = [offices[0].temperature]
+    outside_temperature_over_time = [outside.temperature]
+    for t in timeline[:-1:]:
+        for office in offices:
+            office.update_temperature(dt, 0.003)
+        corridor.update_temperature(dt, 0.003)
+        for office in offices:
+            office.execute_temperature()
+        corridor.execute_temperature()
         corridor_temperature_over_time.append(corridor.temperature)
-        if t == 0:
-            print(neighbor_temps)
-    print(corridor_temperature_over_time)
+        office_temperature_over_time.append(offices[0].temperature)
+        outside_temperature_over_time.append(outside.temperature)
+    
+    plt.plot(timeline, corridor_temperature_over_time, timeline, office_temperature_over_time, timeline, outside_temperature_over_time)
+    plt.show()

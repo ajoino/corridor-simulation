@@ -5,7 +5,7 @@ class Room():
     def __init__(self, name='', temperature=None, position=None):
         self.name = name
         self.temperature = temperature
-        self.new_temperature = 0
+        self.new_temperature = temperature
         self.neighbors = []
 
     def __repr__(self):
@@ -17,8 +17,12 @@ class Room():
 
     def update_temperature(self, dt, coefficient):
         #self.temperature = new_temperature
-        
-        return new_temperature
+        neighbor_temperatures = np.array([neighbor.temperature for neighbor in self.neighbors])
+        self.new_temperature = self.temperature - dt * coefficient * np.sum(self.temperature - neighbor_temperatures)
+        #return new_temperature
+
+    def execute_temperature(self):
+        self.temperature = self.new_temperature
 
     def add_neighbors(self, neighbors):
         for neighbor in neighbors:
