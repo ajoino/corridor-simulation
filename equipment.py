@@ -22,7 +22,7 @@ class HeatRegulationEquipment():
             self.output = -self.power
 
     def turn_off(self):
-        self.is_on = True
+        self.is_on = False
         self.output = 0
 
     def produce(self):
