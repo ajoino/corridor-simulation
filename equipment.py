@@ -6,7 +6,7 @@ class HeatRegulationEquipment():
         self.name = name
         self.power = power
         self.is_on = is_on
-        self.heater = True
+        self.heater = heater
         if is_on and heater:
             self.output = power
         elif is_on and not heater:
@@ -46,4 +46,6 @@ if __name__ == '__main__':
     print(test_heater.produce())
     print(test_cooler.produce())
     test_heater.turn_on()
+    test_cooler.turn_on()
     print(test_heater.produce())
+    print(test_cooler.produce())
