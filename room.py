@@ -2,11 +2,13 @@ import numpy as np
 from equipment import Heater, Cooler
 
 class Room():
-    def __init__(self, name='', temperature=None, position=None):
+    def __init__(self, name='', temperature=0, requested_temperature=0, position=None, static=False):
         self.name = name
         self.temperature = temperature
         self.new_temperature = temperature
+        self.requested_temperature = requested_temperature
         self.neighbors = []
+        self.static = static
 
     def __repr__(self):
         return f'Room: {self.name}\n\tTemperature: {self.temperature}\n'
@@ -17,8 +19,14 @@ class Room():
 
     def update_temperature(self, dt, coefficient):
         #self.temperature = new_temperature
+        if self.static:
+            return
         neighbor_temperatures = np.array([neighbor.temperature for neighbor in self.neighbors])
-        self.new_temperature = self.temperature - dt * coefficient * np.sum(self.temperature - neighbor_temperatures)
+        extra_temp = 0
+        if hasattr(self, 'heater'):
+            extra_temp = dt * (self.heater.produce() + self.cooler.produce())
+
+        self.new_temperature = self.temperature - dt * coefficient * np.sum(self.temperature - neighbor_temperatures) + extra_temp
         #return new_temperature
 
     def execute_temperature(self):
@@ -39,10 +47,10 @@ class Room():
             neighbor.neighbors.append(self)
 
 class Office(Room):
-    def __init__(self, name='', temperature=None, position=None, heater_power=0, cooler_power=0):
-        super().__init__(name, temperature)
-        heater = Heater(self.name, heater_power)
-        cooler = Cooler(self.name, cooler_power)
+    def __init__(self, name='', temperature=None, requested_temperature=None, position=None, heater_power=0, cooler_power=0):
+        super().__init__(name, temperature, requested_temperature)
+        self.heater = Heater(self.name, heater_power)
+        self.cooler = Cooler(self.name, cooler_power)
 
     def __str__(self):
         return f'Office {self.name}'

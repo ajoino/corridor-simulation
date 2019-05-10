@@ -2,19 +2,49 @@ from pprint import pprint
 import numpy as np
 import matplotlib.pyplot as plt
 from room import Room, Office
+import random
 
 class Environment():
-    def __init__(self):
-        pass
+    def __init__(self, rooms, timeline):
+        self.rooms = rooms
+        self.timeline = timeline
+        self.dt = timeline[1] - timeline[0]
+        self.simulated_temperatures = np.zeros((len(timeline), len(self.rooms)))
+
+    def run_loop(self):
+        for room in self.rooms:
+            room.update_temperature(self.dt,0.0003)
+        for room in self.rooms:
+            room.execute_temperature()
+        return np.array([room.temperature for room in self.rooms])
+
+    def run_simulation(self):
+        for i, t in enumerate(timeline):
+            self.simulated_temperatures[i, :] = self.run_loop()
+            rooms[0].temperature = 293 + 5*np.sin(t/len(timeline))
+            self.simulated_temperatures[i, 0] = rooms[0].temperature
+            for room in self.rooms[2:]:
+                if room.temperature >= room.requested_temperature:
+                    room.heater.turn_off()
+                    if room.temperature > room.requested_temperature + 0.5:
+                        room.cooler.turn_on()
+                elif room.temperature < room.requested_temperature:
+                    room.cooler.turn_off()
+                    if room.temperature < room.requested_temperature - 0.5:
+                        room.heater.turn_on()
 
 if __name__ == '__main__':
     offices = []
     corridor = Room('CC', 273)
-    outside = Room('OO', 298)
+    outside = Room('OO', 298, static=True)
     office_names = ['NW', 'NN', 'NE', 'SW', 'SS', 'SE']
+    office_temperatures = [303, 300, 294.0, 297, 291, 288]
+    office_requested_temperatures = [293, 297, 295, 294, 298, 291]
+    print(office_requested_temperatures)
 
-    for name in office_names:
-        offices.append(Office(name, 295, heater_power=1500, cooler_power=200))
+
+    for name, temp, req in zip(office_names, office_temperatures, office_requested_temperatures):
+        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=0.0003*70, cooler_power=0.0003*20))
     num_offices = len(offices)
 
     for i, office in enumerate(offices):
@@ -30,8 +60,16 @@ if __name__ == '__main__':
     for office in offices:
         office.add_neighbors([corridor, outside])
 
-    dt = 1
-    timeline = np.arange(0,611,dt)
+    dt = 10
+    timeline = np.arange(0, 24*3600, dt)
+
+    rooms = [outside, corridor] + offices
+    environment = Environment(rooms, timeline)
+    environment.run_simulation()
+    plt.plot(timeline, environment.simulated_temperatures)
+    plt.legend(('OO', 'CC', 'NW', 'NN', 'NE', 'SW', 'SS', 'SE'))
+    plt.show()
+    """
     corridor_temperature_over_time = [corridor.temperature]
     office_temperature_over_time = [offices[0].temperature]
     outside_temperature_over_time = [outside.temperature]
@@ -45,6 +83,6 @@ if __name__ == '__main__':
         corridor_temperature_over_time.append(corridor.temperature)
         office_temperature_over_time.append(offices[0].temperature)
         outside_temperature_over_time.append(outside.temperature)
-    
     plt.plot(timeline, corridor_temperature_over_time, timeline, office_temperature_over_time, timeline, outside_temperature_over_time)
     plt.show()
+    """
