@@ -13,19 +13,30 @@ class HeatRegulationEquipment():
             self.output = -power
         elif not is_on:
             self.output = 0
+        self.regulation = 0
+        self.total_power_used = 0
     
     def turn_on(self):
         self.is_on = True
-        if self.heater:
-            self.output = self.power
-        else:
-            self.output = -self.power
 
     def turn_off(self):
         self.is_on = False
         self.output = 0
 
+    def regulate(self, current_temperature, requested_temperature):
+        self.regulation = requested_temperature - current_temperature
+        if self.heater:
+            self.output = min(self.power, max(0, self.power * self.regulation))
+            #self.output = self.power * self.regulation
+        else:
+            self.output = max(-self.power, min(0, -self.power * -self.regulation))
+            #self.output = -self.power * self.regulation
+        print(self.regulation)
+
     def produce(self):
+        print(self.output)
+        #print(self.is_on)
+        self.total_power_used += 10*self.output
         return self.output
 
 """

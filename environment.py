@@ -19,11 +19,17 @@ class Environment():
         return np.array([room.temperature for room in self.rooms])
 
     def run_simulation(self):
+        for room in rooms[2:]:
+            room.heater.turn_on()
+            room.cooler.turn_on()
         for i, t in enumerate(timeline):
             self.simulated_temperatures[i, :] = self.run_loop()
-            rooms[0].temperature = 293 + 5*np.sin(t/len(timeline))
+            rooms[0].temperature = 285.5 + 12.5*np.sin(t/len(timeline))
             self.simulated_temperatures[i, 0] = rooms[0].temperature
             for room in self.rooms[2:]:
+                room.heater.regulate(room.temperature, room.requested_temperature)
+                room.cooler.regulate(room.temperature, room.requested_temperature)
+                """
                 if room.temperature >= room.requested_temperature:
                     room.heater.turn_off()
                     if room.temperature > room.requested_temperature + 0.5:
@@ -32,6 +38,7 @@ class Environment():
                     room.cooler.turn_off()
                     if room.temperature < room.requested_temperature - 0.5:
                         room.heater.turn_on()
+                """
 
 if __name__ == '__main__':
     offices = []
@@ -44,7 +51,7 @@ if __name__ == '__main__':
 
 
     for name, temp, req in zip(office_names, office_temperatures, office_requested_temperatures):
-        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=0.0003*70, cooler_power=0.0003*20))
+        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=100/43.2e3, cooler_power=100/43.2e3))
     num_offices = len(offices)
 
     for i, office in enumerate(offices):
@@ -66,6 +73,8 @@ if __name__ == '__main__':
     rooms = [outside, corridor] + offices
     environment = Environment(rooms, timeline)
     environment.run_simulation()
+    print([room.heater.total_power_used for room in environment.rooms[2:]])
+    print([room.cooler.total_power_used for room in environment.rooms[2:]])
     plt.plot(timeline, environment.simulated_temperatures)
     plt.legend(('OO', 'CC', 'NW', 'NN', 'NE', 'SW', 'SS', 'SE'))
     plt.show()
