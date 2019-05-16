@@ -1,5 +1,6 @@
 import numpy as np
-from equipment import Heater, Cooler
+import equipment
+#from equipment import equipment.Heater, equipment.Cooler
 
 class Room():
     def __init__(self, name='', temperature=0, requested_temperature=0, position=None, static=False):
@@ -49,8 +50,8 @@ class Room():
 class Office(Room):
     def __init__(self, name='', temperature=None, requested_temperature=None, position=None, heater_power=0, cooler_power=0):
         super().__init__(name, temperature, requested_temperature)
-        self.heater = Heater(self.name, heater_power)
-        self.cooler = Cooler(self.name, cooler_power)
+        self.heater = equipment.Heater(self.name, heater_power)
+        self.cooler = equipment.Cooler(self.name, cooler_power)
 
     def __str__(self):
         return f'Office {self.name}'

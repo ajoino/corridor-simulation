@@ -24,7 +24,7 @@ class Environment():
             room.cooler.turn_on()
         for i, t in enumerate(timeline):
             self.simulated_temperatures[i, :] = self.run_loop()
-            rooms[0].temperature = 285.5 + 12.5*np.sin(t/len(timeline))
+            rooms[0].temperature = 285.5 + 12.5*np.sin(2*np.pi*t/timeline[-1])
             self.simulated_temperatures[i, 0] = rooms[0].temperature
             for room in self.rooms[2:]:
                 room.heater.regulate(room.temperature, room.requested_temperature)
@@ -46,12 +46,12 @@ if __name__ == '__main__':
     outside = Room('OO', 298, static=True)
     office_names = ['NW', 'NN', 'NE', 'SW', 'SS', 'SE']
     office_temperatures = [303, 300, 294.0, 297, 291, 288]
-    office_requested_temperatures = [293, 297, 295, 294, 298, 291]
+    office_requested_temperatures = [303, 300, 294.0, 297, 291, 288]#[293, 297, 295, 294, 298, 291]
     print(office_requested_temperatures)
 
 
     for name, temp, req in zip(office_names, office_temperatures, office_requested_temperatures):
-        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=100/43.2e3, cooler_power=100/43.2e3))
+        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=1500/43.2e3, cooler_power=1500/43.2e3))
     num_offices = len(offices)
 
     for i, office in enumerate(offices):
@@ -67,16 +67,20 @@ if __name__ == '__main__':
     for office in offices:
         office.add_neighbors([corridor, outside])
 
-    dt = 10
-    timeline = np.arange(0, 24*3600, dt)
+    dt = 1
+    seconds_per_day = 24 * 3600
+    timeline = np.arange(0, seconds_per_day, dt)
+    #timeline = np.linspace(0,seconds_per_day,seconds_per_day//dt)
 
     rooms = [outside, corridor] + offices
+    requested_temperatures = np.ones((len(timeline), len(offices))) * np.array(office_requested_temperatures)
     environment = Environment(rooms, timeline)
     environment.run_simulation()
     print([room.heater.total_power_used for room in environment.rooms[2:]])
     print([room.cooler.total_power_used for room in environment.rooms[2:]])
     plt.plot(timeline, environment.simulated_temperatures)
     plt.legend(('OO', 'CC', 'NW', 'NN', 'NE', 'SW', 'SS', 'SE'))
+    plt.plot(timeline, requested_temperatures, 'k')
     plt.show()
     """
     corridor_temperature_over_time = [corridor.temperature]
