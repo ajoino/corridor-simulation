@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
 
     for name, temp, req in zip(office_names, office_temperatures, office_requested_temperatures):
-        offices.append(Office(name, temperature=temp, requested_temperature=req, heater_power=1500/43.2e3, cooler_power=1500/43.2e3))
+        offices.append(Office(name, temperature=None, heater_power=1500/43.2e3, cooler_power=1500/43.2e3))
     num_offices = len(offices)
 
     for i, office in enumerate(offices):

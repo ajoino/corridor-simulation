@@ -3,13 +3,16 @@ import equipment
 #from equipment import equipment.Heater, equipment.Cooler
 
 class Room():
-    def __init__(self, name='', temperature=0, requested_temperature=0, position=None, static=False):
+    def __init__(self, name='', temperature=0, heat_capacity=1, 
+            temperature_sensor=None, position=None, static=False):
         self.name = name
         self.temperature = temperature
         self.new_temperature = temperature
-        self.requested_temperature = requested_temperature
+        #self.requested_temperature = requested_temperature
         self.neighbors = []
         self.static = static
+        self.temperature_sensor=temperature_sensor
+        self.heat_capacity = heat_capacity
 
     def __repr__(self):
         return f'Room: {self.name}\n\tTemperature: {self.temperature}\n'
@@ -25,13 +28,14 @@ class Room():
         neighbor_temperatures = np.array([neighbor.temperature for neighbor in self.neighbors])
         extra_temp = 0
         if hasattr(self, 'heater'):
-            extra_temp = dt * (self.heater.produce() + self.cooler.produce())
+            extra_temp = dt / self.heat_capacity * (self.heater.produce() + self.cooler.produce())
 
         self.new_temperature = self.temperature - dt * coefficient * np.sum(self.temperature - neighbor_temperatures) + extra_temp
         #return new_temperature
 
     def execute_temperature(self):
         self.temperature = self.new_temperature
+        self.temperature_sensor.measure_temperature(self)
 
     def add_neighbors(self, neighbors):
         for neighbor in neighbors:
@@ -48,10 +52,11 @@ class Room():
             neighbor.neighbors.append(self)
 
 class Office(Room):
-    def __init__(self, name='', temperature=None, requested_temperature=None, position=None, heater_power=0, cooler_power=0):
-        super().__init__(name, temperature, requested_temperature)
-        self.heater = equipment.Heater(self.name, heater_power)
-        self.cooler = equipment.Cooler(self.name, cooler_power)
+    def __init__(self, name='', temperature=None, heat_capacity=1, 
+            temperature_sensor=None, position=None, heater=None, cooler=None):
+        super().__init__(name, temperature, heat_capacity, temperature_sensor)
+        self.heater = heater
+        self.cooler = cooler
 
     def __str__(self):
         return f'Office {self.name}'
