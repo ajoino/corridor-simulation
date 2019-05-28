@@ -34,15 +34,48 @@ class Cooler(HeatRegulationEquipment):
 class TemperatureSensor():
     def __init__(self, name, brand, temperature = 0):
         self.name = name
-        #self.room = room
         self.temperature = temperature
         self.brand = brand
 
     def measure_temperature(self, room):
-        self.temperature = room.temperature + np.random.randn() * 0.1
+        self.temperature = room.temperature + np.random.randn() * 0.00
 
     def temperature_service(self):
         return {}
+
+class Controller():
+    def __init__(self, setpoint,
+            heater_id='', cooler_id='', indoor_temp_sensor_id='', outdoor_temp_sensor_id=''):
+        self.setpoint = setpoint
+        self.temperature = 0
+        self.heater_id = heater_id
+        self.cooler_id = cooler_id
+        self.indoor_temp_sensor_id = indoor_temp_sensor_id
+        self.outdoor_temp_sensor_id = outdoor_temp_sensor_id
+
+    def update_setpoint(self, new_setpoint):
+        """ Updates the setpoint, perhaps a pointless method """
+        self.setpoint = new_setpoint
+
+    def read_temperature(self, temperature_message):
+        """ Receives a SenML message and updates the current temperature """
+        pass
+
+    def update_control(self):
+        """ Updates the control value """
+        pass
+
+    def read_and_update(self, temperature_message):
+        """ Reads temperature and updates control value """
+        pass
+
+    def heater_message(self):
+        """ Returns heater message """
+        pass
+
+    def cooler_message(self):
+        """ Returns cooler message """
+        pass
 
 if __name__ == '__main__':
     pass

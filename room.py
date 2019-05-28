@@ -13,6 +13,7 @@ class Room():
         self.static = static
         self.temperature_sensor=temperature_sensor
         self.heat_capacity = heat_capacity
+        self.position = position
 
     def __repr__(self):
         return f'Room: {self.name}\n\tTemperature: {self.temperature}\n'
@@ -20,6 +21,9 @@ class Room():
     def __str__(self):
         #return self.__repr__()
         return f'Room {self.name}'
+
+    def change_temperature(self, new_temp):
+        self.temperature = new_temp
 
     def update_temperature(self, dt, coefficient):
         #self.temperature = new_temperature
@@ -34,6 +38,8 @@ class Room():
         #return new_temperature
 
     def execute_temperature(self):
+        if self.static:
+            return
         self.temperature = self.new_temperature
         self.temperature_sensor.measure_temperature(self)
 
@@ -43,7 +49,7 @@ class Room():
                 print(f'\n{neighbor} is not of class Room')
                 continue
             if neighbor in self.neighbors:
-                print(f'\n{neighbor} is already a neighbor of {self}')
+                #print(f'\n{neighbor} is already a neighbor of {self}', file=sys.stderr)
                 continue
             if neighbor is self:
                 print(f'\n{self} cannot be its own neighbor')
@@ -53,13 +59,23 @@ class Room():
 
 class Office(Room):
     def __init__(self, name='', temperature=None, heat_capacity=1, 
-            temperature_sensor=None, position=None, heater=None, cooler=None):
+            temperature_sensor=None, position=None, heater=None, cooler=None, controller=None):
         super().__init__(name, temperature, heat_capacity, temperature_sensor)
         self.heater = heater
         self.cooler = cooler
+        self.controller = controller
 
     def __str__(self):
         return f'Office {self.name}'
+
+    def update_control(self, dt, time):
+        temperature_message = self.temperature_sensor.temperature_service(time)
+        self.controller.read_and_update(temperature_message, dt, time)
+        heater_message = self.controller.heater_message(time)
+        cooler_message = self.controller.cooler_message(time)
+        self.heater.regulate_output(heater_message)
+        self.cooler.regulate_output(cooler_message)
+        return temperature_message, heater_message, cooler_message
 
 class Outside(Room):
     pass

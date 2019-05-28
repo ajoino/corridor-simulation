@@ -29,16 +29,6 @@ class Environment():
             for room in self.rooms[2:]:
                 room.heater.regulate(room.temperature, room.requested_temperature)
                 room.cooler.regulate(room.temperature, room.requested_temperature)
-                """
-                if room.temperature >= room.requested_temperature:
-                    room.heater.turn_off()
-                    if room.temperature > room.requested_temperature + 0.5:
-                        room.cooler.turn_on()
-                elif room.temperature < room.requested_temperature:
-                    room.cooler.turn_off()
-                    if room.temperature < room.requested_temperature - 0.5:
-                        room.heater.turn_on()
-                """
 
 if __name__ == '__main__':
     offices = []

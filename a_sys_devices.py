@@ -36,29 +36,20 @@ class TemperatureSensor(equipment.TemperatureSensor):
     def __init__(self, name, temperature):
         super().__init__(name, 'Asys', temperature)
 
-    def temperature_service(self):
+    def temperature_service(self, time):
         """ Returns a SenML message containing the temperature of the room """
-        message = [{'n': self.name, 't': 'timestamp', 'u': 'Cel', 'v': self.temperature}]
+        message = [{'n': self.name, 't': int(time), 'u': 'K', 'v': self.temperature}]
         return json.dumps(message)
 
-class Controller():
+class Controller(equipment.Controller):
     """ PI Controller of brand Asys """
     def __init__(self, setpoint, k_P, k_I, 
-            heater_id=None, cooler_id=None, indoor_temp_sensor_id='', outdoor_temp_sensor_id=''):
-        self.setpoint = setpoint
-        self.temperature = 0
+            heater_id='', cooler_id='', indoor_temp_sensor_id='', outdoor_temp_sensor_id=''):
+        super().__init__(setpoint, heater_id, cooler_id, indoor_temp_sensor_id, outdoor_temp_sensor_id)
         self.integral = 0
         self.k_P = k_P
         self.k_I = k_I
         self.control = 0
-        self.heater_id = heater_id
-        self.cooler_id = cooler_id
-        self.indoor_temp_sensor_id = indoor_temp_sensor_id
-        self.outdoor_temp_sensor_id = outdoor_temp_sensor_id
-
-    def update_setpoint(self, new_setpoint):
-        """ Updates the setpoint, perhaps a pointless method """
-        self.setpoint = new_setpoint
 
     def read_temperature(self, temperature_message):
         """ Receives a SenML message and updates the current temperature """
@@ -66,7 +57,7 @@ class Controller():
         measurement = message[0]
         if measurement['n'] != self.indoor_temp_sensor_id:
             return
-        elif measurement['u'] != 'Cel':
+        elif measurement['u'] != 'K':
             return
         self.temperature = measurement['v']
 
@@ -81,15 +72,15 @@ class Controller():
         self.read_temperature(temperature_message)
         self.update_control(dt, P, I, D)
 
-    def heater_message(self):
+    def heater_message(self, time):
         """ Returns heater message """
-        message = [{'n': self.heater_id, 't': 'timestamp', 'u': 'W', 'v': max(0, self.control)}]
+        message = [{'n': self.heater_id, 't': int(time), 'u': 'W', 'v': max(0, self.control)}]
         return json.dumps(message)
         #return f"""[{{"n": "{self.heater_id}", "t": "timestamp", "u": "W", "v": {max(0, self.control)}}}]"""
 
-    def cooler_message(self):
+    def cooler_message(self, time):
         """ Returns cooler message """
-        message = [{'n': self.cooler_id, 't': 'timestamp', 'u': 'W', 'v': -max(0, self.control)}]
+        message = [{'n': self.cooler_id, 't': int(time), 'u': 'W', 'v': -min(self.control, 0)}]
         return json.dumps(message)
         #return f"""[{{"n": "{self.cooler_id}", "t": "timestamp", "u": "W", "v": {-max(0, self.control)}}}]"""
 
@@ -99,16 +90,16 @@ if __name__ == '__main__':
     temp_sensor = TemperatureSensor('office', office)
     heater = Heater('office_heater', 1500)
     cooler = Cooler('office_cooler', 1000)
-    print(temp_sensor.temperature_service())
+    print(temp_sensor.temperature_service(time))
     controller = Controller(293, 0.1, 0.1,
             heater.name, cooler.name, temp_sensor.name)
-    controller.read_temperature(temp_sensor.temperature_service())
+    controller.read_temperature(temp_sensor.temperature_service(time))
     controller.update_control(10)
-    print(controller.heater_message())
-    print(controller.cooler_message())
+    print(controller.heater_message(time))
+    print(controller.cooler_message(time))
     print(controller.integral)
     for i in range(200):
         controller.update_control(10)
-    print(controller.heater_message())
-    print(controller.cooler_message())
+    print(controller.heater_message(time))
+    print(controller.cooler_message(time))
     print(controller.integral)
