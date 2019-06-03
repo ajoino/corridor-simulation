@@ -39,6 +39,7 @@ class Room():
 
     def execute_temperature(self):
         if self.static:
+            self.temperature_sensor.measure_temperature(self)
             return
         self.temperature = self.new_temperature
         self.temperature_sensor.measure_temperature(self)
