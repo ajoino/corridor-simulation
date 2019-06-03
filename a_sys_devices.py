@@ -5,8 +5,8 @@ import json
 
 class Heater(equipment.HeatRegulationEquipment):
     """ Heater of brand Asys """
-    def __init__(self, name='', max_power=0):
-        super().__init__(name, max_power)
+    def __init__(self, name='', max_power=0, coordinates=False):
+        super().__init__(name, max_power, coordinates=coordinates)
 
     def regulate_output(self, message):
         """ Receives a SenML message and updates the output of the heater """
@@ -19,8 +19,8 @@ class Heater(equipment.HeatRegulationEquipment):
 
 class Cooler(equipment.HeatRegulationEquipment):
     """ Cooler of brand Asys """
-    def __init__(self, name='', power=0):
-        super().__init__(name, power)
+    def __init__(self, name='', power=0, coordinates=False):
+        super().__init__(name, power, coordinates=coordinates)
 
     def regulate_output(self, message):
         """ Receives a SenML message and updates the output of the cooler """
@@ -33,8 +33,8 @@ class Cooler(equipment.HeatRegulationEquipment):
 
 class TemperatureSensor(equipment.TemperatureSensor):
     """ Temperature sensor of brand Asys """
-    def __init__(self, name, temperature):
-        super().__init__(name, 'Asys', temperature)
+    def __init__(self, name, temperature, coordinates=False):
+        super().__init__(name, 'Asys', temperature, coordinates=coordinates)
 
     def temperature_service(self, time):
         """ Returns a SenML message containing the temperature of the room """
@@ -44,8 +44,8 @@ class TemperatureSensor(equipment.TemperatureSensor):
 class Controller(equipment.Controller):
     """ PI Controller of brand Asys """
     def __init__(self, setpoint, k_P, k_I, 
-            heater_id='', cooler_id='', indoor_temp_sensor_id='', outdoor_temp_sensor_id=''):
-        super().__init__(setpoint, heater_id, cooler_id, indoor_temp_sensor_id, outdoor_temp_sensor_id)
+            heater_id='', cooler_id='', indoor_temp_sensor_id='', outdoor_temp_sensor_id='', coordinates=False):
+        super().__init__(setpoint, heater_id, cooler_id, indoor_temp_sensor_id, outdoor_temp_sensor_id, coordinates=coordinates)
         self.integral = 0
         self.k_P = k_P
         self.k_I = k_I

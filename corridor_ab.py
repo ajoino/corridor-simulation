@@ -3,10 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import b_tech_devices as Btech
-from room import Room, Office
+import a_sys_devices as Asys
+from room_double_controller import Room, Office
 
 def celsius(kelvin):
     return kelvin - 273.15
+
 class Environment():
     def __init__(self, timeline):
         self.room_init()
@@ -25,8 +27,12 @@ class Environment():
                     Outside/OO
         """
         # Setup the 'normal' rooms
-        corridor = Room('CC', 273, heat_capacity=46e3, temperature_sensor=Btech.TemperatureSensor('temp_sensor', 0, coordinates = (0, 0)))
-        outside = Room('OO', None, heat_capacity=46e3, temperature_sensor=Btech.TemperatureSensor('OO_temp_sensor', 0, coordinates=(2, 0)), static=True)
+        corridor = Room('CC', 273, heat_capacity=46e3, 
+                heater_temperature_sensor=Asys.TemperatureSensor('CC_temp_sensor', 0, coordinates = (0, 0)),
+                cooler_temperature_sensor=Btech.TemperatureSensor('temp_sensor', 0, coordinates=(0, 0)))
+        outside = Room('OO', None, heat_capacity=46e3, 
+                heater_temperature_sensor=Asys.TemperatureSensor('OO_temp_sensor', 0, coordinates=(2, 0)),
+                cooler_temperature_sensor=Btech.TemperatureSensor('temp_sensor', 0, coordinates=(2, 0)), static=True)
 
         # Setup the offices
         offices = []
@@ -40,13 +46,18 @@ class Environment():
 
         # Create the new offices, currently with no temperature
         for name, position in zip(office_names, office_positions):
-            temp = Btech.TemperatureSensor(f'{name}_temp_sensor', 0, coordinates=position)
-            heater = Btech.Heater(f'{name}_Heater', 1500, coordinates=position)
-            cooler = Btech.Cooler(f'{name}_Cooler', 1500, coordinates=position)
-            controller = Btech.Controller(f'{name}_Controller', 1.50, 0.01, 
-                    heater.name, cooler.name, temp.name, coordinates=position)
+            heater_temp = Asys.TemperatureSensor(f'{name}_temp_sensor', 0, coordinates=position)
+            cooler_temp = Btech.TemperatureSensor(f'temp_sensor', 0, coordinates=position)
+            heater = Asys.Heater(f'{name}_Heater', 1500, coordinates=position)
+            cooler = Btech.Cooler(f'Cooler', 1500, coordinates=position)
+            heater_controller = Asys.Controller(f'{name}_Controller', 150, 1, 
+                    heater.name, None, heater_temp.name, coordinates=position)
+            cooler_controller = Btech.Controller(f'Controller', 1.50, 0.01, 
+                    None, cooler.name, cooler_temp.name, coordinates=position)
             offices.append(Office(name, temperature=None, heat_capacity=46e3, position=position,
-                temperature_sensor=temp, heater=heater, cooler=cooler, controller=controller))
+                cooler_temperature_sensor=cooler_temp, heater_temperature_sensor=heater_temp, 
+                heater=heater, cooler=cooler, 
+                cooler_controller=cooler_controller, heater_controller=heater_controller))
         num_offices = len(offices)
 
         # Neighbor the North and South sides
@@ -68,10 +79,13 @@ class Environment():
 
     def room_setup(self, start_temperatures, setpoints):
         for room, temp, setpoint in zip(self.rooms, start_temperatures, setpoints):
+            print(room)
             room.change_temperature(temp)
-            room.temperature_sensor.measure_temperature(room)
+            room.heater_temperature_sensor.measure_temperature(room)
+            room.cooler_temperature_sensor.measure_temperature(room)
             if isinstance(room, Office):
-                room.controller.update_setpoint(setpoint)
+                room.heater_controller.update_setpoint(celsius(setpoint))
+                room.cooler_controller.update_setpoint(setpoint)
 
     def loop(self, dt, timestep):
         loop_messages = []
@@ -79,7 +93,8 @@ class Environment():
             if isinstance(room, Office):
                 loop_messages += room.update_control(dt, timestep)
             else:
-                loop_messages.append(room.temperature_sensor.temperature_service(timestep))
+                loop_messages.append(room.heater_temperature_sensor.temperature_service(timestep))
+                loop_messages.append(room.cooler_temperature_sensor.temperature_service(timestep))
             room.update_temperature(dt, 1e-4)
         for room in self.rooms:
             room.execute_temperature()
@@ -92,10 +107,12 @@ class Environment():
         for i, t in enumerate(timeline):
             if t % 86400 == 43200:
                 for room in environment.rooms[2:]:
-                    room.controller.update_setpoint(290-273.15)
+                    room.heater_controller.update_setpoint(290)
+                    room.cooler_controller.update_setpoint(290)
             elif t % 86400 == 0:
                 for room in environment.rooms[2:]:
-                    room.controller.update_setpoint(295-273.15)
+                    room.heater_controller.update_setpoint(295)
+                    room.cooler_controller.update_setpoint(295)
             self.rooms[0].temperature = 293 + 10*np.sin(2*np.pi*t/timeline[-1])
             if i % 100 == 0:
                 print(self.rooms[0].temperature)
@@ -110,9 +127,10 @@ if __name__ == '__main__':
     timeline = np.arange(0, timestop, dt)
 
     environment = Environment(timeline)
-    environment.rooms[0].temperature = 290-273.15
+    environment.rooms[0].temperature = 290
     environment.room_setup(np.array([290, 291, 292, 293, 294, 295, 296, 297]), np.array([297, 296, 295, 294, 293, 292, 291, 290]))
-    print([room.controller.setpoint for room in environment.rooms[2:]])
+    print([room.heater_controller.setpoint for room in environment.rooms[2:]])
+    print([room.cooler_controller.setpoint for room in environment.rooms[2:]])
     
     start = time.time()
     simulated_temperatures, message_list = environment.run(timeline)
