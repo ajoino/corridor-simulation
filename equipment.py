@@ -40,7 +40,7 @@ class TemperatureSensor():
         self.coordinates = coordinates
 
     def measure_temperature(self, room):
-        self.temperature = room.temperature + np.random.randn() * 0.00
+        self.temperature = room.temperature + np.random.randn() * 0.05
 
     def temperature_service(self):
         return {}

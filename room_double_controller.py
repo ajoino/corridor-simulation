@@ -85,7 +85,7 @@ class Office(Room):
         cooler_message = self.cooler_controller.cooler_message(time)
         self.heater.regulate_output(heater_message)
         self.cooler.regulate_output(cooler_message)
-        return heater_temperature_message, cooler_temperature_message, heater_message, cooler_message
+        return [heater_temperature_message, heater_message, cooler_temperature_message, cooler_message]
 
 class Outside(Room):
     pass

@@ -3,6 +3,7 @@ import equipment
 import room
 import json
 from pprint import pprint
+from utils import celsius
 
 class Heater(equipment.HeatRegulationEquipment):
     """ Heater of brand B-tech """
@@ -48,7 +49,7 @@ class TemperatureSensor(equipment.TemperatureSensor):
 
     def temperature_service(self, timestep):
         """ Returns a SenML message containing the temperature of the room """
-        message = [{'bn': self.name, 'bt': int(timestep)}, {'u': 'Cel', 'v': self.temperature - 273.15}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
+        message = [{'bn': self.name, 'bt': int(timestep)}, {'u': 'Cel', 'v': celsius(self.temperature)}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
         return json.dumps(message)
 
 class Controller(equipment.Controller):
