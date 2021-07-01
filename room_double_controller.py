@@ -30,16 +30,11 @@ class Room():
         self.temperature = new_temp
 
     def update_temperature(self, dt, coefficient):
-        #self.temperature = new_temperature
         if self.static:
             return
-        neighbor_temperatures = np.array([neighbor.temperature for neighbor in self.neighbors])
-        extra_temp = 0
-        if hasattr(self, 'heater'):
-            extra_temp = dt / self.heat_capacity * (self.heater.produce() + self.cooler.produce())
+        neighbor_temp_diff = [self.temperature - neighbor.temperature for neighbor in self.neighbors]
 
-        self.new_temperature = self.temperature - dt * coefficient * np.sum(self.temperature - neighbor_temperatures) + extra_temp
-        #return new_temperature
+        self.new_temperature = self.temperature - dt * coefficient * sum(neighbor_temp_diff)
 
     def execute_temperature(self):
         if self.static:
@@ -75,6 +70,11 @@ class Office(Room):
 
     def __str__(self):
         return f'Office {self.name}'
+
+    def update_temperature(self, dt, coefficient):
+        super().update_temperature(dt, coefficient)
+
+        self.new_temperature += dt / self.heat_capacity * (self.heater.produce() + self.cooler.produce())
 
     def update_control(self, dt, time):
         heater_temperature_message = self.heater_temperature_sensor.temperature_service(time)

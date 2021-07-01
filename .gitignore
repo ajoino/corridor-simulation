@@ -1,3 +1,5 @@
 *.pyc
 *.vim
 *.msg
+*.idea
+*.mypy_cache/*

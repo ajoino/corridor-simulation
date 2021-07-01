@@ -71,7 +71,7 @@ class Environment():
 
     def room_setup(self, start_temperatures, setpoints):
         for room, temp, setpoint in zip(self.rooms, start_temperatures, setpoints):
-            room.change_temperature(temp)
+            room.temperature = temp
             room.temperature_sensor.measure_temperature(room)
             if isinstance(room, Office):
                 room.controller.update_setpoint(setpoint)

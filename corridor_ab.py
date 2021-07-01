@@ -109,12 +109,12 @@ class Environment():
         message_a_list = []
         message_b_list = []
         for i, (t, temperature) in enumerate(zip(timeline, temperature_data)):
-            if t % 86400 == 43200:
+            if t % 86400 == 64800 or t == 0:
                 for room in environment.rooms[2:]:
                     new_setpoint = profile[room.name]['nighttime setpoint']
                     room.heater_controller.update_setpoint(new_setpoint)
                     room.cooler_controller.update_setpoint(celsius(new_setpoint))
-            elif t % 86400 == 0:
+            elif t % 86400 == 21600:
                 for room in environment.rooms[2:]:
                     new_setpoint = profile[room.name]['daytime setpoint']
                     room.heater_controller.update_setpoint(new_setpoint)
@@ -123,10 +123,6 @@ class Environment():
             simulated_temperatures[i, :], a_messages, b_messages = self.loop(dt, t)
             message_a_list.extend(a_messages)
             message_b_list.extend(b_messages)
-            if i % 100 == 0:
-                #print(self.rooms[0].temperature)
-                #print(messages[3])
-                pass
         return simulated_temperatures, message_a_list, message_b_list
 
 def get_historical_data(filename):
@@ -138,7 +134,7 @@ if __name__ == '__main__':
     np.random.seed(42)
     parser = argparse.ArgumentParser()
     parser.add_argument('--timestep', help='Simulation timestep', type=int, default=10)
-    parser.add_argument('--simulation-length', help='length of simulation in days', type=float, default=1)
+    parser.add_argument('--simulation-length', help='length of simulation in days', type=float, default=10)
     parser.add_argument('--output-folder', help='Output folder', default='.')
     parser.add_argument('--temperature-data', help='choose what real data you want', default='feb')
     parser.add_argument('--noise', help='simulate with noise', type=bool, default=False)
@@ -176,6 +172,6 @@ if __name__ == '__main__':
         with open(f'{args.output_folder}/ab_messages_b.msg', 'w') as f:
             f.writelines(f'{message}\n' for message in message_b_list)
     print(temperature_data.index)
-    plt.plot(temperature_data.index, simulated_temperatures)
+    plt.plot(temperature_data.index[:simulated_temperatures.shape[0]], simulated_temperatures)
     plt.legend(('OO', 'CC', 'NW', 'NN', 'NE', 'SW', 'SS', 'SE'))
     plt.show()

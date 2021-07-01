@@ -1,9 +1,23 @@
 import numpy as np
 import equipment
 import room
-import json
-from pprint import pprint
 from utils import celsius
+
+class PowerOutput:
+    def __set_name__(self, owner, name):
+        self.instance_name = '_' + name
+
+    def __init__(self, max_power: float):
+        self.max_power = max_power
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        return instance._power
+
+    def __set__(self, instance, value):
+        self._power = max(0, min(value, self.max_power))
 
 class Heater(equipment.HeatRegulationEquipment):
     """ Heater of brand B-tech """
@@ -12,7 +26,6 @@ class Heater(equipment.HeatRegulationEquipment):
 
     def regulate_output(self, message):
         """ Receives a SenML message and updates the output of the heater """
-        message = json.loads(message)
         metadata, measurement, longitude, latitude = message
         if metadata['bn'] != self.name:
             return
@@ -31,7 +44,7 @@ class Cooler(equipment.HeatRegulationEquipment):
 
     def regulate_output(self, message):
         """ Receives a SenML message and updates the output of the cooler """
-        metadata, measurement, longitude, latitude = json.loads(message)
+        metadata, measurement, longitude, latitude = message
         if metadata['bn'] != self.name:
             return
         elif longitude['u'] != 'Lon' and longitude['v'] != self.coordinates[0]:
@@ -40,7 +53,7 @@ class Cooler(equipment.HeatRegulationEquipment):
             return
         elif measurement['u'] != '/':
             return
-        self.output = -self.max_power * np.clip(measurement['v'], 0, 1)
+        self.output = min(-self.max_power * measurement['v'], 0)
 
 class TemperatureSensor(equipment.TemperatureSensor):
     """ Temperature sensor of brand B-tech """
@@ -49,8 +62,11 @@ class TemperatureSensor(equipment.TemperatureSensor):
 
     def temperature_service(self, timestep):
         """ Returns a SenML message containing the temperature of the room """
-        message = [{'bn': self.name, 'bt': int(timestep)}, {'u': 'Cel', 'v': celsius(self.temperature)}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
-        return json.dumps(message)
+        message = [{'bn': self.name, 'bt': int(timestep)},
+                   {'u': 'Cel', 'v': celsius(self.temperature)},
+                   {'u': 'Lon', 'v': f'{self.coordinates[0]}'},
+                   {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
+        return message
 
 class Controller(equipment.Controller):
     """ PI Controller of brand B-tech """
@@ -64,8 +80,7 @@ class Controller(equipment.Controller):
 
     def read_temperature(self, temperature_message):
         """ Receives a SenML message and updates the current temperature """
-        message = json.loads(temperature_message)
-        metadata, measurement, longitude, latitude = message
+        metadata, measurement, longitude, latitude = temperature_message
         if metadata['bn'] != self.indoor_temp_sensor_id:
             return
         elif longitude['u'] != 'Lon' and longitude['v'] != self.coordinates[0]:
@@ -79,8 +94,8 @@ class Controller(equipment.Controller):
     def update_control(self, dt, P=True, I=True, D=True):
         """ Updates the control value """
         error = self.setpoint - self.temperature
-        self.integral = np.clip(self.integral + error * dt, -10 * self.k_P, 10 * self.k_P)
-        self.control = self.k_P * error + self.k_I * self.integral
+        self.integral = max(-10 * self.k_P, min(self.integral + error * dt, 10 * self.k_P))
+        self.control = max(-1, min(self.k_P * error + self.k_I * self.integral, 1))
 
     def read_and_update(self, temperature_message, dt, P=True, I=True, D=True):
         """ Reads temperature and updates control value """
@@ -89,14 +104,13 @@ class Controller(equipment.Controller):
 
     def heater_message(self, timestep):
         """ Returns heater message """
-        message = [{'bn': self.heater_id, 'bt': int(timestep)}, {'u': '/', 'v': max(0, self.control)}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
-        return json.dumps(message)
-        #return f"""[{{"n": "{self.heater_id}", "t": "timestamp", "u": "W", "v": {max(0, self.control)}}}]"""
+        message = [{'bn': self.heater_id, 'bt': int(timestep)}, {'u': '/', 'v': self.control}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
+        return message
 
     def cooler_message(self, timestep):
         """ Returns cooler message """
         message = [{'bn': self.cooler_id, 'bt': int(timestep)}, {'u': '/', 'v': -min(self.control, 0)}, {'u': 'Lon', 'v': f'{self.coordinates[0]}'}, {'u': 'Lat', 'v': f'{self.coordinates[1]}'}]
-        return json.dumps(message)
+        return message
         #return f"""[{{"n": "{self.cooler_id}", "t": "timestamp", "u": "W", "v": {-max(0, self.control)}}}]"""
 
 if __name__ == '__main__':
