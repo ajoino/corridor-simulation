@@ -39,7 +39,7 @@ class Heater(equipment.HeatRegulationEquipment):
 
 class Cooler(equipment.HeatRegulationEquipment):
     """ Cooler of brand B-tech """
-    def __init__(self, name='', power=0, coordinates=0):
+    def __init__(self, name='', power=0, coordinates=0) -> object:
         super().__init__(name, power, coordinates=coordinates)
 
     def regulate_output(self, message):

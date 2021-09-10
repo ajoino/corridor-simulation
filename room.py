@@ -1,6 +1,4 @@
-from typing import Tuple, Set, Union, Dict
-
-import numpy as np
+from typing import Tuple, Set, Dict, Mapping
 
 
 class Temperature:
@@ -38,7 +36,7 @@ class StaticTemperature:
 class Room:
     temperature = Temperature()
     static_temp = StaticTemperature()
-    neighbors: Dict[str, "Room"]
+    neighbors: Dict[str, Tuple[int, "Room"]]
 
     def __init__(
             self,
@@ -64,26 +62,26 @@ class Room:
 
     def update_temperature(
             self,
-            current_temperatures: Dict[str, float],
+            current_temperatures: Mapping[str, float],
             dt: float,
             coefficient: float,
             equipment_power: float,
     ) -> None:
         neighbor_temperatures = (
-            temp for room_name, temp in current_temperatures.items()
+            (self.neighbors[room_name][0], temp) for room_name, temp in current_temperatures.items()
             if room_name in self.neighbors
         )
 
-        self.temperature = self.temperature - dt * coefficient * sum(
-                self.temperature - neighbor_temperature
-                for neighbor_temperature in neighbor_temperatures
-        ) + dt / self.heat_capacity * equipment_power
+        self.temperature = self.temperature - dt * (coefficient * sum(
+                self.temperature - neighbor_multiplier * neighbor_temperature
+                for neighbor_multiplier, neighbor_temperature in neighbor_temperatures
+        ) + equipment_power / self.heat_capacity)
 
-    def add_neighbors(self, neighbors: Set["Room"]) -> None:
+    def add_neighbors(self, neighbors: Set[Tuple[int, "Room"]]) -> None:
         """
 
         """
-        self.neighbors = {**self.neighbors, **{room.name: room for room in neighbors}}
+        self.neighbors = {**self.neighbors, **{room.name: (multiplier, room) for multiplier, room in neighbors}}
         """
         for neighbor in neighbors:
             if not isinstance(neighbor, Room):

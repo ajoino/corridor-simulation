@@ -1,4 +1,6 @@
+import csv
 import sys
+import datetime
 from pathlib import Path
 from typing import NamedTuple, Dict, Tuple, List, Sequence, Union, Optional, Generator, Iterable
 import itertools
@@ -11,6 +13,7 @@ from numpy.random import RandomState
 from scipy import signal
 import pandas as pd
 from matplotlib import pyplot as plt
+import ujson as json
 
 from equipment import (
     TemperatureSensor,
@@ -64,6 +67,8 @@ class ControllerPair(NamedTuple):
         self.a_sys.setpoint = new_setpoint
         self.b_tech.setpoint = new_setpoint - 273.15
 
+    def get_setpoint(self):
+        return self.a_sys.setpoint, self.b_tech.setpoint
 
 class HeatRegPair(NamedTuple):
     a_sys: HeatRegulationEquipment
@@ -76,6 +81,11 @@ class HeatRegPair(NamedTuple):
     def produce(self) -> float:
         return self.a_sys.produce() + self.b_tech.produce()
 
+    def output(self) -> Tuple[float, float]:
+        return (
+            self.a_sys.output,
+            self.b_tech.output,
+        )
 
 class Environment:
     temp_sensors: Dict[str, TempSensorPair]
@@ -193,8 +203,9 @@ class Environment:
             current_time: float,
             outside_temperature: float,
             noise_vector: npt.ArrayLike,
-    ) -> Tuple[npt.ArrayLike, List[Tuple[MessagePair, ...]]]:
+    ) -> Tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, List[Tuple[MessagePair, ...]]]:
         self.update_random_setpoints(current_time)
+        self.outside.static_temp = outside_temperature + 273.15
         # Record and update current temperatures
         current_room_temperatures = {name: room.temperature for name, room in self.rooms.items()}
 
@@ -204,10 +215,14 @@ class Environment:
         # Send messages around and update controllers and regulation equipment
         messages = self.update_control(dt, current_time)
 
-        self.outside.static_temp = outside_temperature + 273.15
         self.update_room_temperatures(current_room_temperatures, dt)
 
-        return list(current_room_temperatures.values()), *messages
+        return (
+            list(current_room_temperatures.values()),
+            list(controller.a_sys.setpoint for controller in self.controllers.values()),
+            list(heat_reg.b_tech.output + heat_reg.a_sys.output for heat_reg in self.heat_reg_eq.values()),
+            *messages
+        )
 
     def _update_control(
             self,
@@ -283,7 +298,7 @@ class Environment:
     def update_random_setpoints(self, timestep: float):
         if timestep % 3600 == 0:
             for controller_pair in self.controllers.values():
-                controller_pair.set_point(random.uniform(288.15, 303.15))
+                controller_pair.set_point(random.uniform(278.15, 313.15))
 
     def room_simulation_startup(self, start_temperature: float):
         for room in self.rooms.values():
@@ -300,41 +315,84 @@ class Environment:
         timeline = historical_data['timeline']
         temperature_data = historical_data['Lufttemperatur']
         dt = timeline[1] - timeline[0]
+        simulation_length = min(len(timeline), len(temperature_data))
 
         self.room_simulation_startup(temperature_data[0])
         self._set_prng(random_seed)
-        simulated_temperatures = np.zeros((min(len(timeline), len(temperature_data)), len(self.rooms)))
+        simulated_temperatures = np.zeros((simulation_length, len(self.rooms)))
+        setpoints = np.zeros((simulation_length, len(self.controllers)))
+        heat_reg_output = np.zeros((simulation_length, len(self.heat_reg_eq)))
         simulated_noise = self.generate_noise(simulated_temperatures.shape)
 
         accumulated_messages = []
         start = time.perf_counter()
         for i, (t, outside_temperature) in enumerate(zip(timeline, temperature_data)):
-            simulated_temperatures[i, :], *messages = self.step(dt, t, outside_temperature, simulated_noise[i, :])
+            (simulated_temperatures[i, :],
+             setpoints[i, :],
+             heat_reg_output[i, :],
+             *messages) = self.step(dt, t, outside_temperature, simulated_noise[i, :])
             accumulated_messages.append(messages)
         stop = time.perf_counter()
 
         self.simulation_time = stop - start
 
-        self.messages = tuple([message for messages in system_messages for message in messages] for system_messages in zip(*accumulated_messages))
+        self.messages = tuple(system_messages for system_messages in zip(*accumulated_messages))
         self.simulated_temperatures = simulated_temperatures
+        self.simulated_setpoints = setpoints
+        self.heat_reg_output = heat_reg_output
+        self.timeline = timeline
         return simulated_temperatures, *self.messages # type: ignore
 
 
-    @staticmethod
-    def get_historical_data(filename: Union[str, Path]) -> pd.DataFrame:
+    def get_historical_data(self, filename: Union[str, Path]) -> pd.DataFrame:
         historical_data = pd.read_csv(filename, header=0, sep=',', parse_dates=[['Datum', 'Tid (UTC)']])
         df = historical_data[['Datum_Tid (UTC)', 'Lufttemperatur']].set_index('Datum_Tid (UTC)')
         df['timeline'] = np.array([3600 * float(i) for i, _ in enumerate(df.iterrows())])
         df = df.resample('10S').asfreq().interpolate('time')
-        df['timedelta'] = pd.to_timedelta(df['timeline'], unit='S')
+        self.historical_data = df['timedelta'] = pd.to_timedelta(df['timeline'], unit='S')
         return df
 
     def plot_temperatures(self, temperature_data: pd.DataFrame):
+        from matplotlib.cm import get_cmap
+        from cycler import cycler
+        color_list = get_cmap('tab10').colors
         # Formatting the x-axis correctly https://stackoverflow.com/questions/15240003/matplotlib-intelligent-axis-labels-for-timedelta
         plt.plot(temperature_data['timeline'], self.simulated_temperatures)
         plt.legend(self.room_names)
+        plt.figure()
+        plt.rc('axes', prop_cycle=(cycler('color', color_list[2:])))
+        plt.plot(temperature_data['timeline'], self.simulated_setpoints)
+        plt.legend(self.controllers.keys())
         #plt.savefig(f'test_fig_seed_{self.random_seed}-2.png')
         plt.show()
+
+    def save_simulation_data(self):
+        simulation_data = pd.DataFrame()
+        simulation_data['timeline'] = [rep_time for time in self.timeline for rep_time in itertools.repeat(time, 8)]
+        simulation_data['datetime'] = [rep_date.isoformat() for date in self.historical_data.index
+                                       for rep_date in itertools.repeat(date, 8)]
+        simulation_data['messages_a'] = [json.dumps(message) for messages in self.messages[0]
+                                         for message in messages
+                                         if message[0]["n"].endswith('temp_sensor')]
+        simulation_data['messages_b'] = [json.dumps(message) for messages in self.messages[1]
+                                         for message in messages
+                                         if message[0]["bn"].endswith('temp_sensor')]
+        simulation_data['room_name'] =  [name for name, _ in zip(itertools.cycle(self.room_names), simulation_data['timeline'])]
+        simulation_data['room_temperature'] = self.simulated_temperatures.flatten()
+        simulation_data['setpoint'] = [item for row in self.simulated_setpoints
+                                       for item in itertools.chain((float('nan'), float('nan')), row)]
+        simulation_data['actuation'] = [item for row in self.heat_reg_output
+                                        for item in itertools.chain((float('nan'), float('nan')), row)]
+        simulation_data['previous_actuation'] = [float('nan'), float('nan'), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]\
+                                                + [item for row in self.heat_reg_output[:-1]
+                                                 for item in itertools.chain((float('nan'), float('nan')), row)]
+
+        train_test_cutoff_index = len(simulation_data) * 5 // 6
+        simulation_data.iloc[:train_test_cutoff_index, :].to_csv('simulation_data_train.csv', sep=';', index=False)
+        simulation_data.iloc[train_test_cutoff_index:, :].to_csv('simulation_data_test.csv', sep=';', index=False)
+        simulation_data.to_csv('simulation_data_all.csv', sep=';', index=False)
+
+        return simulation_data
 
 
 if __name__ == '__main__':
@@ -352,7 +410,10 @@ if __name__ == '__main__':
             random_seed=1337,
     )
 
-    print(f'Time elapsed: {env.simulation_time:.2f}')
-    env.plot_temperatures(temperature_data)
+    print(f'Time elapsed: {env.simulation_time:.2f} s.')
+
+    simulation_data = env.save_simulation_data()
+
+    #env.plot_temperatures(temperature_data)
 
 
