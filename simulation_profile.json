@@ -1,8 +1,0 @@
-{
-	"NW": {"daytime setpoint": 294.15, "nighttime setpoint": 291.15},
-	"NN": {"daytime setpoint": 296.15, "nighttime setpoint": 291.15},
-	"NE": {"daytime setpoint": 294.55, "nighttime setpoint": 291.15},
-	"SW": {"daytime setpoint": 293.15, "nighttime setpoint": 291.15},
-	"SS": {"daytime setpoint": 297.68, "nighttime setpoint": 291.15},
-	"SE": {"daytime setpoint": 295.15, "nighttime setpoint": 291.15}
-}

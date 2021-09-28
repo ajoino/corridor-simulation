@@ -1,3 +1,4 @@
+import csv
 import itertools
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -9,6 +10,7 @@ import numpy.typing as npt
 import matplotlib.pyplot as plt
 import pandas as pd
 from numpy.random import RandomState
+import seaborn as sns
 import ujson as json
 
 import equipment
@@ -80,6 +82,8 @@ class Environment(ABC):
             current_time: float,
     ) -> Messages:
         for room_name, messages in temperature_messages.items():
+            if room_name == self.outside.name:
+                continue
             for target, message in messages.items():
                 self.controllers[room_name][target].read_and_update(message, time_delta)
         messages = {
@@ -94,7 +98,7 @@ class Environment(ABC):
         for room_name, messages in controller_messages.items():
             for target, message in messages.items():
                 self.heat_reg_eq[room_name][target].regulate_output(message)
-        outputs = {
+        outputs = {self.outside.name: None} | {
             room_name: equipment['heater'].output + equipment['cooler'].output
             for room_name, equipment in self.heat_reg_eq.items()
         }
@@ -150,7 +154,7 @@ class Environment(ABC):
             self,
             historical_data: pd.DataFrame,
             random_seed: Optional[int] = None,
-    ) -> Tuple[npt.ArrayLike, List, List]:
+    ) -> Tuple[npt.ArrayLike, List]:
         timeline = historical_data['timeline']
         temperature_data = historical_data['Lufttemperatur']
         dt = timeline[1] - timeline[0]
@@ -159,11 +163,11 @@ class Environment(ABC):
         self.room_simulation_startup(temperature_data[0])
         self._set_prng(random_seed)
         simulated_temperatures = np.zeros((simulation_length, len(self.rooms)))
-        setpoints = np.zeros((simulation_length, len(self.controllers)))
-        heat_reg_output = np.zeros((simulation_length, len(self.heat_reg_eq)))
+        setpoints = np.zeros((simulation_length, len(self.rooms)))
+        heat_reg_output = np.zeros((simulation_length, len(self.rooms)))
         simulated_noise = self.generate_noise(simulated_temperatures.shape)
 
-        accumulated_messages = {'temp': [], 'control': []}
+        accumulated_messages = []
         start = time.perf_counter()
         for i, (t, outside_temperature) in enumerate(zip(timeline, temperature_data)):
             (simulated_temperatures[i, :],
@@ -171,8 +175,12 @@ class Environment(ABC):
              heat_reg_output[i, :],
              temperature_messages,
              controller_messages) = self.step(dt, t, outside_temperature, simulated_noise[i, :])
-            accumulated_messages['temp'].append(temperature_messages)
-            accumulated_messages['control'].append(controller_messages)
+            accumulated_messages.append(
+                {room_name: {'temp_sensor': temp_message, 'control': control_message}
+                for (room_name, temp_message), control_message in itertools.zip_longest(
+                        temperature_messages.items(), itertools.chain((None,), controller_messages.values()),
+                )}
+            )
         stop = time.perf_counter()
 
         self.simulation_time = stop - start
@@ -182,7 +190,7 @@ class Environment(ABC):
         self.simulated_setpoints = setpoints
         self.heat_reg_output = heat_reg_output
         self.timeline = timeline
-        return simulated_temperatures, *self.messages # type: ignore
+        return simulated_temperatures, self.messages # type: ignore
 
 
     def get_historical_data(self, filename: Union[str, Path]) -> pd.DataFrame:
@@ -201,38 +209,74 @@ class Environment(ABC):
         plt.plot(temperature_data['timeline'], self.simulated_temperatures)
         plt.legend(self.rooms.keys())
         plt.figure()
-        plt.rc('axes', prop_cycle=(cycler('color', color_list[2:])))
+        plt.rc('axes', prop_cycle=(cycler('color', color_list[1:])))
         plt.plot(temperature_data['timeline'], self.simulated_setpoints)
         plt.legend(self.controllers.keys())
-        #plt.savefig(f'test_fig_seed_{self.random_seed}-2.png')
+        plt.figure()
+        plt.rc('axes', prop_cycle=(cycler('color', color_list[1:])))
+        plt.plot(temperature_data['timeline'], self.heat_reg_output)
+        plt.legend(self.controllers.keys())
+        plt.figure()
+        plt.plot(temperature_data['timeline'], self.simulated_setpoints[:, 1], temperature_data['timeline'], self.simulated_temperatures[:, 1])
+        plt.legend(['setpoint', 'temperature'])
         plt.show()
+        plt.figure()
 
     def save_simulation_data(self):
-        simulation_data = pd.DataFrame()
-        simulation_data['timeline'] = [rep_time for time in self.timeline for rep_time in itertools.repeat(time, 8)]
-        simulation_data['datetime'] = [rep_date.isoformat() for date in self.historical_data.index
-                                       for rep_date in itertools.repeat(date, 8)]
-        simulation_data['messages_a'] = [json.dumps(message) for messages in self.messages[0]
-                                         for message in messages
-                                         if message[0]["n"].endswith('temp_sensor')]
-        simulation_data['messages_b'] = [json.dumps(message) for messages in self.messages[1]
-                                         for message in messages
-                                         if message[0]["bn"].endswith('temp_sensor')]
-        simulation_data['room_name'] =  [name for name, _ in zip(itertools.cycle(self.rooms.keys()), simulation_data['timeline'])]
-        simulation_data['room_temperature'] = self.simulated_temperatures.flatten()
-        simulation_data['setpoint'] = [item for row in self.simulated_setpoints
-                                       for item in itertools.chain((float('nan'), float('nan')), row)]
-        simulation_data['actuation'] = [item for row in self.heat_reg_output
-                                        for item in itertools.chain((float('nan'), float('nan')), row)]
-        simulation_data['previous_actuation'] = [float('nan'), float('nan'), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] \
-                                                + [item for row in self.heat_reg_output[:-1]
-                                                   for item in itertools.chain((float('nan'), float('nan')), row)]
+        first_previous_actuations = np.concatenate([[[float('nan')]], np.zeros((1, len(self.controllers)))], axis=1)
+        previous_actuations = np.concatenate([first_previous_actuations, self.heat_reg_output[:-1]], axis=0)
+        data_list = []
+        for timestamp, datetime, message_grouping, temperatures, setpoints, actuations, prev_actuations in zip(
+                self.timeline, self.historical_data.index, self.messages, self.simulated_temperatures, self.simulated_setpoints, self.heat_reg_output, previous_actuations,
+        ):
+            for (room_name, room_messages), temp, setpoint, actuation, prev_actuation in zip(
+                    message_grouping.items(),
+                    temperatures,
+                    setpoints,
+                    actuations,
+                    prev_actuations,
+            ):
+                for system, system_messages in room_messages.items():
+                    if system_messages is None:
+                        continue
+                    for unit, unit_message in system_messages.items():
+                        data_list.append(
+                                (timestamp,
+                                datetime,
+                                json.dumps(unit_message),
+                                room_name,
+                                system,
+                                unit,
+                                temp,
+                                setpoint,
+                                actuation,
+                                prev_actuation,)
+                        )
 
-        train_test_cutoff_index = len(simulation_data) * 5 // 6
-        simulation_data.iloc[:train_test_cutoff_index, :].to_csv('simulation_data_train.csv', sep=';', index=False)
-        simulation_data.iloc[train_test_cutoff_index:, :].to_csv('simulation_data_test.csv', sep=';', index=False)
-        simulation_data.to_csv('simulation_data_all.csv', sep=';', index=False)
-
+        simulation_data = pd.DataFrame(
+                data=data_list,
+                columns=[
+                    'timeline',
+                    'datetime',
+                    'message',
+                    'room_name',
+                    'system',
+                    'unit',
+                    'temperature',
+                    'setpoint',
+                    'actuation',
+                    'previous_actuation',
+                ]
+        )
+        simulation_data['message'] = simulation_data['message'].astype(str)
+        print("Start saving data.")
+        simulation_data.to_csv('simulation_data_new_all.csv', sep=';', index=False, quoting=csv.QUOTE_NONE)
+        print("Finished saving data.")
+        test_cutoff_time = simulation_data['timeline'].max() * 0.8
+        simulation_train_data = simulation_data[simulation_data.timeline < test_cutoff_time]
+        simulation_test_data = simulation_data[simulation_data.timeline >= test_cutoff_time]
+        simulation_train_data.to_csv('simulation_data_train.csv', sep=';', index=False, quoting=csv.QUOTE_NONE)
+        simulation_test_data.to_csv('simulation_data_test.csv', sep=';', index=False, quoting=csv.QUOTE_NONE)
         return simulation_data
 
     def _set_prng(self, seed: Optional[int] = None):

@@ -33,10 +33,21 @@ class StaticTemperature:
         instance._temp = value
 
 
+class StaticBool:
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        return instance._static
+
+    def __set__(self, instance, value: bool):
+        instance._static = value
+
 class Room:
     temperature = Temperature()
     static_temp = StaticTemperature()
     neighbors: Dict[str, Tuple[int, "Room"]]
+    static = StaticBool()
 
     def __init__(
             self,
@@ -67,15 +78,18 @@ class Room:
             coefficient: float,
             equipment_power: float,
     ) -> None:
+        if self.static:
+            return
+
         neighbor_temperatures = (
             (self.neighbors[room_name][0], temp) for room_name, temp in current_temperatures.items()
             if room_name in self.neighbors
         )
 
-        self.temperature = self.temperature - dt * (coefficient * sum(
-                self.temperature - neighbor_multiplier * neighbor_temperature
+        self.temperature -= dt * (coefficient * sum(
+                neighbor_multiplier * (self.temperature - neighbor_temperature)
                 for neighbor_multiplier, neighbor_temperature in neighbor_temperatures
-        ) + equipment_power / self.heat_capacity)
+        ) - equipment_power / self.heat_capacity)
 
     def add_neighbors(self, neighbors: Set[Tuple[int, "Room"]]) -> None:
         """
